@@ -1,0 +1,7 @@
+# Yêu cầu thư viện cho ứng dụng Chữ ký số RSA
+
+# GUI framework
+PyQt6>=6.4.0
+
+# Tạo file Word (.docx) – tuỳ chọn nhưng khuyến nghị
+python-docx>=0.8.11
