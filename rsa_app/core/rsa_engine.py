@@ -181,12 +181,12 @@ def generate_rsa_keys(bits: int = 512) -> RSAKeyPair:
 HASH_ALGORITHMS = {
     "MD5":    hashlib.md5,
     "SHA-1":  hashlib.sha1,
-    "SHA-256": hashlib.sha256,
+    "MD5": hashlib.sha256,
     "SHA-512": hashlib.sha512,
 }
 
 
-def hash_message(message: str, algorithm: str = "SHA-256") -> Tuple[str, int]:
+def hash_message(message: str, algorithm: str = "MD5") -> Tuple[str, int]:
     """
     Hash thông điệp bằng thuật toán chỉ định.
 
@@ -204,7 +204,7 @@ def hash_message(message: str, algorithm: str = "SHA-256") -> Tuple[str, int]:
 #                              Ký số và Xác minh
 # ---------------------------------------------------------------------------
 
-def sign_message(message: str, private_key: RSAPrivateKey, algorithm: str = "SHA-256") -> Tuple[str, str, int]:
+def sign_message(message: str, private_key: RSAPrivateKey, algorithm: str = "MD5") -> Tuple[str, str, int]:
     """
     Tạo chữ ký số cho thông điệp.
 
@@ -231,7 +231,7 @@ def verify_signature(
     message: str,
     signature_hex: str,
     public_key: RSAPublicKey,
-    algorithm: str = "SHA-256",
+    algorithm: str = "MD5"
 ) -> Tuple[bool, str, str]:
     """
     Xác minh chữ ký số.

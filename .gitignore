@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Temp / logs
+*.log
+*.tmp
+
+# wheels/ được commit có chủ đích để Docker build nhanh (offline install)
+# Nếu muốn xóa khỏi repo: thêm "wheels/" vào đây
