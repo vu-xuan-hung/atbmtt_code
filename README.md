@@ -6,7 +6,9 @@ Trên các hệ điều hành Linux (như Ubuntu), Python yêu cầu sử dụng
 ### 1. Tạo môi trường ảo (Virtual Environment)
 
 ```bash
-cd atbmtt
+cd atbmtt_code
+cd rsa_app
+
 python -m venv .venv
 ```
 
@@ -21,7 +23,6 @@ pip install -r requirements.txt
 ### 3. Khởi động ứng dụng
 
 ```bash
-cd rsa_app
 python main.py
 ```
 
