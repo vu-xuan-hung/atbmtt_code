@@ -180,9 +180,7 @@ def generate_rsa_keys(bits: int = 512) -> RSAKeyPair:
 
 HASH_ALGORITHMS = {
     "MD5":    hashlib.md5,
-    "SHA-1":  hashlib.sha1,
-    "MD5": hashlib.sha256,
-    "SHA-512": hashlib.sha512,
+    
 }
 
 
@@ -217,10 +215,10 @@ def sign_message(message: str, private_key: RSAPrivateKey, algorithm: str = "MD5
     """
     hash_hex, hash_int = hash_message(message, algorithm)
 
-    # Đảm bảo hash_int < n (lấy modulo nếu cần)
+    # Đảm bảo hash_int < n đưa giá trị băm về phạm vi các số mà RSA làm việc
     hash_int = hash_int % private_key.n
 
-    # Ký: S = hash^d mod n
+    # S = hash^d mod n
     signature_int = power_mod(hash_int, private_key.d, private_key.n)
     signature_hex = hex(signature_int)[2:] 
 

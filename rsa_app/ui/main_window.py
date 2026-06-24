@@ -12,7 +12,8 @@ import sys, os, random
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QLineEdit, QTextEdit, QPushButton, QComboBox,
-    QFileDialog, QMessageBox, QFrame, QApplication, QGroupBox
+    QFileDialog, QMessageBox, QFrame, QApplication, QGroupBox,
+    QDialog, QTableWidget, QTableWidgetItem, QHeaderView, QDialogButtonBox, QAbstractItemView
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QThread, pyqtSignal, QTimer
 
@@ -21,6 +22,7 @@ from rsa_app.core import (
     HASH_ALGORITHMS
 )
 from rsa_app.utils import save_signature_file, read_file
+from rsa_app.utils.file_manager import read_signature_csv, read_sig, PANDAS_AVAILABLE
 
 
 STYLE = """
@@ -258,6 +260,7 @@ class MainWindow(QMainWindow):
         row_mh.addStretch()
         self.btn_load_file_sign = QPushButton("📂 Thêm file")
         self.btn_load_file_sign.setObjectName("btnGray")
+        # [PDF] Khi bat ho tro PDF, doi tooltip thanh: "Mo file (.txt, .docx, .pdf) de ky so"
         self.btn_load_file_sign.setToolTip("Mở file (.txt, .docx) để ký số")
         self.btn_load_file_sign.clicked.connect(self._on_load_file_to_sign)
         row_mh.addWidget(self.btn_load_file_sign)
@@ -286,10 +289,10 @@ class MainWindow(QMainWindow):
 
         row_bottom = QHBoxLayout()
         row_bottom.addStretch()
-        self.btn_save_sig = QPushButton("💾 Lưu chữ ký (.txt)")
+        self.btn_save_sig = QPushButton("💾 Lưu chữ ký (.sig)")
         self.btn_save_sig.setObjectName("btnGray")
         self.btn_save_sig.setEnabled(False)
-        self.btn_save_sig.setToolTip("Lưu mã chữ ký số ra file .txt")
+        self.btn_save_sig.setToolTip("Lưu toàn bộ thông tin chữ ký ra file .sig (JSON – chuẩn cryptography)")
         self.btn_save_sig.clicked.connect(self._on_save_sig)
         row_bottom.addWidget(self.btn_save_sig)
         lay.addLayout(row_bottom)
@@ -335,7 +338,7 @@ class MainWindow(QMainWindow):
         row_sig_hdr.addStretch()
         self.btn_load_sig_file = QPushButton("📂 Mở file chữ ký")
         self.btn_load_sig_file.setObjectName("btnGray")
-        self.btn_load_sig_file.setToolTip("Mở file chữ ký số (.txt, .docx)")
+        self.btn_load_sig_file.setToolTip("Mở file chữ ký số (.sig, .csv, .txt, .docx)")
         self.btn_load_sig_file.clicked.connect(self._on_load_sig_file)
         row_sig_hdr.addWidget(self.btn_load_sig_file)
         lay.addLayout(row_sig_hdr)
@@ -360,6 +363,7 @@ class MainWindow(QMainWindow):
 
         self.btn_load_msg_file = QPushButton("📂 Mở file văn bản")
         self.btn_load_msg_file.setObjectName("btnGray")
+        # [PDF] Khi bat ho tro PDF, doi tooltip thanh: "Mo file van ban nhan duoc (.txt, .docx, .pdf)"
         self.btn_load_msg_file.setToolTip("Mở file văn bản nhận được (.txt, .docx)")
         self.btn_load_msg_file.clicked.connect(self._on_load_msg_file)
         row_mof.addWidget(self.btn_load_msg_file)
@@ -449,18 +453,19 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def _on_load_file_to_sign(self):
-        """Mở file .txt hoặc .docx để đưa nội dung vào ô văn bản ký số.
-        Người dùng cần bấm 'Ký số (Mã hóa)' để thực hiện ký – không tự động ký.
+        """Mo file .txt hoac .docx de dua noi dung vao o van ban ky so.
+        Nguoi dung can bam 'Ky so (Ma hoa)' de thuc hien ky – khong tu dong ky.
         """
         fp, _ = QFileDialog.getOpenFileName(
-            self, "Chọn file cần ký", "", "Supported Files (*.txt *.docx);;Text (*.txt);;Word (*.docx)"
+            self, "Chọn file cần ký", "",
+            "Supported Files (*.txt *.docx *.pdf);;Text (*.txt);;Word (*.docx);;PDF (*.pdf)"
         )
         if not fp:
             return
         try:
             content = read_file(fp)
             self.txt_message.setPlainText(content)
-            # Không tự động ký – người dùng phải bấm "Ký số (Mã hóa)" thủ công
+            # Khong tu dong ky – nguoi dung phai bam "Ky so (Ma hoa)" thu cong
         except Exception as ex:
             self._alert("Lỗi mở file", str(ex))
 
@@ -496,21 +501,27 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def _on_save_sig(self):
-        """Lưu mã chữ ký hex thuần vào file .txt."""
+        """Luu toan bo thong tin chu ky ra file .sig (JSON – chuan cryptography)."""
         if not self._sign_data:
             self._alert("Chưa có chữ ký", "Vui lòng ký số trước khi lưu.")
             return
-        fp, _ = QFileDialog.getSaveFileName(
-            self, "Lưu chữ ký số", "chu_ky.txt", "Text files (*.txt)"
+        fp, selected_filter = QFileDialog.getSaveFileName(
+            self, "Lưu chữ ký số", "chu_ky.sig",
+            "Signature files (*.sig);;CSV – DataFrame (*.csv);;Text files (*.txt);;PDF files (*.pdf)"
         )
         if not fp: return
-        if not fp.endswith(".txt"):
-            fp += ".txt"
+        # Tự động thêm đuôi .sig nếu thiếu
+        if not any(fp.endswith(ext) for ext in (".sig", ".csv", ".txt", ".pdf")):
+            fp += ".sig"
         try:
-            sig_hex = self._sign_data.get("signature_hex", "")
-            with open(fp, "w", encoding="utf-8") as f:
-                f.write(sig_hex)
-            QMessageBox.information(self, "Thành công", f"Đã lưu chữ ký số ra file:\n{fp}")
+            save_signature_file(fp, self._sign_data)
+            fmt_note = {
+                ".sig": "Định dạng: SIG / JSON (chuẩn cryptography, có đầy đủ metadata)",
+                ".csv": "Định dạng: CSV (mỗi lần ký sẽ thêm 1 dòng mới vào file)",
+            }.get(fp[fp.rfind("."):], "")
+            QMessageBox.information(self, "Thành công",
+                f"Đã lưu chữ ký số ra file:\n{fp}\n\n{fmt_note}"
+            )
         except Exception as ex:
             self._alert("Lỗi lưu file", str(ex))
 
@@ -532,22 +543,152 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def _on_load_sig_file(self):
-        """Mở file chữ ký số vào ô bên phải."""
+        """Mo file chu ky so vao o ben phai.
+        - File .sig: doc JSON, tu dong dien chu ky + khoa cong khai + van ban.
+        - File .csv: hien dialog xem truoc DataFrame, chon 1 dong de dien day du thong tin.
+        - File .txt / .docx: doc raw va dien vao o chu ky.
+        """
         fp, _ = QFileDialog.getOpenFileName(
-            self, "Mở file chữ ký", "", "Supported Files (*.txt *.docx);;Text (*.txt);;Word (*.docx)"
+            self, "Mở file chữ ký", "",
+            "Signature files (*.sig);;CSV – DataFrame (*.csv);;Text (*.txt);;Word (*.docx);;PDF (*.pdf);;All files (*)"
         )
         if not fp: return
         try:
-            content = read_file(fp)
-            self.txt_recv_sig.setPlainText(content.strip())
+            if fp.lower().endswith(".sig"):
+                self._load_sig_from_sig(fp)
+            elif fp.lower().endswith(".csv"):
+                self._load_sig_from_csv(fp)
+            else:
+                content = read_file(fp)
+                self.txt_recv_sig.setPlainText(content.strip())
         except Exception as ex:
             self._alert("Lỗi mở file chữ ký", str(ex))
 
+    def _load_sig_from_sig(self, filepath: str):
+        """Doc file .sig (JSON) va tu dong dien day du thong tin vao cac o."""
+        data = read_sig(filepath)
+
+        sig_hex  = data.get("signature_hex", "").strip()
+        msg_val  = data.get("message", "").strip()
+        hash_alg = data.get("hash_algorithm", "").strip()
+        pub      = data.get("public_key", {})
+        n_val    = pub.get("n", "").strip()
+        e_val    = pub.get("e", "").strip()
+
+        self.txt_recv_sig.setPlainText(sig_hex)
+        if n_val:
+            self.inp_recv_n.setText(n_val)
+        if e_val:
+            self.inp_recv_e.setText(e_val)
+        if msg_val:
+            self.txt_recv_msg.setPlainText(msg_val)
+        if hash_alg and self.combo_recv_hash.findText(hash_alg) >= 0:
+            self.combo_recv_hash.setCurrentText(hash_alg)
+
+        if sig_hex and n_val and e_val:
+            self.btn_verify.setEnabled(True)
+            self.btn_tamper.setEnabled(bool(msg_val))
+
+        QMessageBox.information(self, "Đã tải file .sig",
+            f"Đã nạp thông tin từ:\n{filepath}\n\n"
+            f"Chữ ký, khóa công khai (N, e){' và văn bản' if msg_val else ''} đã được điền tự động.\n"
+            "Có thể kiểm tra chữ ký ngay bây giờ."
+        )
+
+    def _load_sig_from_csv(self, filepath: str):
+        """Doc file CSV va hien dialog chon dong, sau do tu dong dien thong tin vao cac o."""
+        rows = read_signature_csv(filepath)
+
+        # Chuyen sang list[dict] neu la DataFrame
+        if PANDAS_AVAILABLE:
+            try:
+                import pandas as pd
+                if isinstance(rows, pd.DataFrame):
+                    rows = rows.to_dict(orient="records")
+            except Exception:
+                pass
+
+        if not rows:
+            self._alert("File trống", "File CSV không có dữ liệu chữ ký.")
+            return
+
+        # --- Dialog xem truoc ---
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Chọn bản ghi chữ ký – {os.path.basename(filepath)}")
+        dlg.setMinimumSize(900, 400)
+        dlg_lay = QVBoxLayout(dlg)
+
+        info = QLabel(f"📄 File: <b>{filepath}</b>  |  Số bản ghi: <b>{len(rows)}</b>  –  Chọn 1 dòng rồi nhấn <b>Chọn</b>")
+        info.setWordWrap(True)
+        dlg_lay.addWidget(info)
+
+        cols = list(rows[0].keys()) if rows else []
+        tbl = QTableWidget(len(rows), len(cols))
+        tbl.setHorizontalHeaderLabels(cols)
+        tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tbl.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        tbl.setAlternatingRowColors(True)
+        tbl.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        tbl.setStyleSheet("font-size: 11px; font-family: Consolas;")
+
+        for r, row_data in enumerate(rows):
+            for c, col in enumerate(cols):
+                val = str(row_data.get(col, ""))
+                item = QTableWidgetItem(val[:80] + "..." if len(val) > 80 else val)
+                item.setToolTip(val)
+                tbl.setItem(r, c, item)
+
+        tbl.selectRow(len(rows) - 1)  # Mac dinh chon dong cuoi
+        dlg_lay.addWidget(tbl)
+
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btns.button(QDialogButtonBox.StandardButton.Ok).setText("Chọn")
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+        dlg_lay.addWidget(btns)
+
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        selected = tbl.currentRow()
+        if selected < 0:
+            selected = len(rows) - 1
+        record = rows[selected]
+
+        # --- Dien thong tin vao cac o ---
+        sig_hex  = record.get("signature_hex", "").strip()
+        n_val    = record.get("public_key_n", "").strip()
+        e_val    = record.get("public_key_e", "").strip()
+        msg_val  = record.get("message", "").strip()
+        hash_alg = record.get("hash_algorithm", "").strip()
+
+        self.txt_recv_sig.setPlainText(sig_hex)
+        if n_val:
+            self.inp_recv_n.setText(n_val)
+        if e_val:
+            self.inp_recv_e.setText(e_val)
+        if msg_val:
+            self.txt_recv_msg.setPlainText(msg_val)
+        if hash_alg and self.combo_recv_hash.findText(hash_alg) >= 0:
+            self.combo_recv_hash.setCurrentText(hash_alg)
+
+        # Kich hoat nut kiem tra neu du thong tin
+        if sig_hex and n_val and e_val:
+            self.btn_verify.setEnabled(True)
+            self.btn_tamper.setEnabled(bool(msg_val))
+
+        QMessageBox.information(self, "Đã tải từ CSV",
+            f"Đã nạp bản ghi #{selected + 1} từ file CSV.\n"
+            f"Chữ ký, khóa công khai (N, e){' và văn bản' if msg_val else ''} đã được điền tự động.\n"
+            "Có thể kiểm tra chữ ký ngay bây giờ."
+        )
+
     @pyqtSlot()
     def _on_load_msg_file(self):
-        """Mở file văn bản nhận được vào ô bên phải."""
+        """Mo file van ban nhan duoc vao o ben phai."""
         fp, _ = QFileDialog.getOpenFileName(
-            self, "Mở file văn bản", "", "Supported Files (*.txt *.docx);;Text (*.txt);;Word (*.docx)"
+            self, "Mở file văn bản", "",
+            "Supported Files (*.txt *.docx *.pdf);;Text (*.txt);;Word (*.docx);;PDF (*.pdf)"
         )
         if not fp: return
         try:

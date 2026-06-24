@@ -3,5 +3,11 @@
 # GUI framework
 PyQt6>=6.4.0
 
-# Tạo file Word (.docx) – tuỳ chọn nhưng khuyến nghị
+# Tạo/đọc file Word (.docx) – tuỳ chọn nhưng khuyến nghị
 python-docx>=0.8.11
+
+# [PDF] Tạo file PDF (lưu chữ ký ra .pdf) – bỏ comment dòng dưới để dùng:
+# reportlab>=4.0.0
+
+# [PDF] Đọc file PDF (mở file .pdf để lấy nội dung) – bỏ comment dòng dưới để dùng:
+# pypdf>=3.0.0
